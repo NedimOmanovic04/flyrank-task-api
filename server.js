@@ -3,12 +3,14 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./openapi.json');
 const db = require('./db');
 const { createSupabaseClient } = require('./supabase');
+const { createAuthRouter } = require('./auth');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 app.use(express.json());
+app.use(createAuthRouter());
 
 
 // Stage 1
