@@ -27,20 +27,27 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Stage 2
+// Helper to ensure response shape matches Assignment 1 (boolean done)
+const formatTask = (task) => ({
+  ...task,
+  done: Boolean(task.done)
+});
+
+// Stage 1: read from database
 app.get('/tasks', (req, res) => {
-  res.json(tasks);
+  const rows = db.prepare('SELECT * FROM tasks').all();
+  res.json(rows.map(formatTask));
 });
 
 app.get('/tasks/:id', (req, res) => {
   const taskId = parseInt(req.params.id, 10);
-  const task = tasks.find(t => t.id === taskId);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
 
   if (!task) {
     return res.status(404).json({ error: `Task ${req.params.id} not found` });
   }
 
-  res.json(task);
+  res.json(formatTask(task));
 });
 
 // Stage 3
