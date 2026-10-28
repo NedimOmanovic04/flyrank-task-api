@@ -2,6 +2,7 @@ const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./openapi.json');
 const db = require('./db');
+const { createSupabaseClient } = require('./supabase');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -81,15 +82,19 @@ app.use((error, req, res, next) => {
 });
 
 if (require.main === module) {
-  db.initialize().then(() => {
+  Promise.resolve().then(() => {
+    createSupabaseClient();
+    return db.initialize();
+  }).then(() => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('Task API listening on port ' + PORT);
+      console.log('Supabase Auth client configured');
     });
     for (const signal of ['SIGINT', 'SIGTERM']) {
       process.once(signal, () => server.close(() => db.close().then(() => process.exit(0))));
     }
   }).catch(async (error) => {
-    console.error('Database initialization failed:', error.message);
+    console.error('Server initialization failed:', error.message);
     await db.close();
     process.exitCode = 1;
   });
