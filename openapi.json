@@ -3,7 +3,7 @@
   "info": {
     "title": "Task API",
     "version": "1.0.0",
-    "description": "PostgreSQL CRUD API for managing a to-do list, started with Docker Compose"
+    "description": "Task API with PostgreSQL CRUD and Supabase Auth (A4)."
   },
   "servers": [
     {
@@ -23,12 +23,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "name": { "type": "string", "example": "Task API" },
-                    "version": { "type": "string", "example": "1.0" },
+                    "name": {
+                      "type": "string",
+                      "example": "Task API"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "1.0"
+                    },
                     "endpoints": {
                       "type": "array",
-                      "items": { "type": "string" },
-                      "example": ["/tasks"]
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "/tasks"
+                      ]
                     }
                   }
                 }
@@ -49,7 +59,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "ok" }
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
                   }
                 }
               }
@@ -87,7 +100,11 @@
             "description": "Field to sort by (id, title, done)",
             "schema": {
               "type": "string",
-              "enum": ["id", "title", "done"],
+              "enum": [
+                "id",
+                "title",
+                "done"
+              ],
               "default": "id"
             }
           },
@@ -98,7 +115,10 @@
             "description": "Sort order (ASC, DESC)",
             "schema": {
               "type": "string",
-              "enum": ["ASC", "DESC"],
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
               "default": "ASC"
             }
           }
@@ -272,6 +292,357 @@
           }
         }
       }
+    },
+    "/auth/signup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Create a Supabase user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created. Confirm email before login if enabled in Supabase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Supabase temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Log in and receive access and refresh tokens",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "integer"
+                    },
+                    "expires_at": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email and password are required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid login credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Supabase temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "End the current session",
+        "description": "Revokes this session refresh tokens. Existing access JWTs may remain valid until expiry.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Logged out; empty response"
+          },
+          "401": {
+            "description": "Missing, malformed, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Supabase temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/info": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "Read public information without authentication",
+        "responses": {
+          "200": {
+            "description": "Public greeting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Welcome stranger! This info is public."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "tags": [
+          "Protected"
+        ],
+        "summary": "Read the verified current user profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified user metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Supabase temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "tags": [
+          "Protected"
+        ],
+        "summary": "Read dashboard using the same auth middleware",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard greeting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Supabase temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -279,40 +650,124 @@
       "Task": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "title": { "type": "string", "example": "Learn HTTP basics" },
-          "done": { "type": "boolean", "example": true }
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "example": "Learn HTTP basics"
+          },
+          "done": {
+            "type": "boolean",
+            "example": true
+          }
         },
-        "required": ["id", "title", "done"]
+        "required": [
+          "id",
+          "title",
+          "done"
+        ]
       },
       "TaskInput": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "example": "Buy milk" }
+          "title": {
+            "type": "string",
+            "example": "Buy milk"
+          }
         },
-        "required": ["title"]
+        "required": [
+          "title"
+        ]
       },
       "TaskUpdateInput": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "example": "Buy oat milk" },
-          "done": { "type": "boolean", "example": true }
+          "title": {
+            "type": "string",
+            "example": "Buy oat milk"
+          },
+          "done": {
+            "type": "boolean",
+            "example": true
+          }
         }
       },
       "Error": {
         "type": "object",
         "properties": {
-          "error": { "type": "string", "example": "Task 99 not found" }
+          "error": {
+            "type": "string",
+            "example": "Task 99 not found"
+          }
         }
       },
       "Stats": {
         "type": "object",
         "properties": {
-          "total": { "type": "integer", "example": 3 },
-          "completed": { "type": "integer", "example": 1 },
-          "pending": { "type": "integer", "example": 2 }
+          "total": {
+            "type": "integer",
+            "example": 3
+          },
+          "completed": {
+            "type": "integer",
+            "example": 1
+          },
+          "pending": {
+            "type": "integer",
+            "example": 2
+          }
         },
-        "required": ["total", "completed", "pending"]
+        "required": [
+          "total",
+          "completed",
+          "pending"
+        ]
+      },
+      "Credentials": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "your-email@example.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "choose-a-strong-password"
+          }
+        }
+      },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Paste only the access_token from POST /auth/login."
       }
     }
   }
