@@ -185,3 +185,72 @@ npm test
   ✔ Extras: GET /stats returns real database counts via SQL
 ✔ Task API SQLite Integration Tests (16 passed, 0 failed)
 ```
+
+---
+
+## Stage 6: The AI Rematch (AI vs Me)
+
+As part of the bonus challenge, an AI model was prompted to execute the migration in quarantine (`ai-version/`). The generated code was thoroughly reviewed, benchmarked, and diffed against the hand-crafted implementation.
+
+### The Initial Prompt Written From Memory
+```text
+I have a Node.js Express CRUD API currently storing tasks in an in-memory array. 
+Please migrate it to use a real SQLite database with the better-sqlite3 library.
+Requirements:
+1. Store data in a local database file named tasks.db.
+2. Automatically create a tasks table if it doesn't exist yet, with columns:
+   - id: integer primary key autoincrement
+   - title: text not null
+   - done: integer/boolean (0 or 1) default 0
+3. Seed 3 initial tasks only if the table is currently empty, so restarting the server does not duplicate seeds:
+   - { title: 'Learn HTTP basics', done: 1 }
+   - { title: 'Build a CRUD API', done: 0 }
+   - { title: 'Test endpoints with curl', done: 0 }
+4. Maintain all 5 existing endpoints with identical behavior and status codes:
+   - GET /tasks -> 200 list of tasks
+   - GET /tasks/:id -> 200 single task or 404 if not found
+   - POST /tasks -> 201 created with assigned id, 400 if title is missing or empty string
+   - PUT /tasks/:id -> 200 updated task, 400 if body is invalid, 404 if not found
+   - DELETE /tasks/:id -> 204 no content, 404 if not found
+5. Always use safe parameterized queries (? placeholders) to avoid SQL injection.
+```
+
+### Review & Diff Analysis (`git diff --no-index server.js ai-version/server.js`)
+
+1. **What did it do better or cleaner?**
+   - **Concise single-file inline implementation**: The AI placed database initialization directly inside `ai-version/server.js`, requiring fewer files for a quick prototype.
+   - **Direct parameterized syntax**: Correctly bound parameters with `.run(newTitle, newDone, req.params.id)`.
+   - **Clean lastInsertRowid extraction**: Extracted the generated ID directly from the `.run()` result object.
+
+2. **What did it get wrong or quietly ignore?**
+   - **Breaking Change on Boolean Type**: SQLite does not have a native boolean storage class and returns integers `0` and `1`. The AI returned these integers directly in the JSON response (`"done": 1`). In Assignment 1, the response contract strictly specified `"done": true`. This broke downstream client contracts and automated tests expecting booleans.
+   - **Missing Atomicity (No Transaction)**: The AI executed 3 individual `insert.run()` calls in sequence without a transaction. If the process was interrupted on insert #1, the table was left partially seeded and would never seed rows #2 and #3 on subsequent restarts because `count > 0`.
+   - **Dropped Metadata & Documentation Endpoints**: The AI completely deleted `GET /`, `GET /health`, and Swagger UI (`/docs`), violating contract continuity.
+   - **Lacked Performance Indexes**: Did not create indexes on `done` or `title`.
+
+3. **What did the prompt forget to specify — and what did the AI silently decide?**
+   - The prompt forgot to specify response JSON type coercion for SQLite integers to booleans (`Boolean(row.done)`). The AI decided to dump raw SQL query results directly to the response body.
+   - The prompt did not explicitly mention keeping non-CRUD endpoints (`/`, `/health`, `/docs`), so the AI stripped them out to write minimal code.
+   - The prompt did not specify transaction safety for multi-row operations.
+
+### The Rematch: Improved Prompt
+> **Updated Prompt**: *"Ensure the JSON responses format `done` as boolean `true`/`false` to maintain identical contract compatibility with Assignment 1, preserve the existing `/`, `/health`, and `/docs` Swagger routes, wrap seeds inside an atomic transaction, and add performance indexes."*
+> 
+> **What changed**: With the updated specification, the AI wrapped seeds in `db.transaction(...)`, added a boolean formatter (`Boolean(task.done)`), and preserved the existing Swagger and health endpoints. 
+> 
+> **Core takeaway**: AI code generation is only as precise as the developer's specification. Building the migration by hand first provided the exact mental model needed to catch subtle schema drifts and contract regressions.
+
+---
+
+## Commit History
+
+The repository documents the sequential, honest development stages:
+
+1. `Stage 0: create SQLite database` — Setup `better-sqlite3`, auto-create `tasks.db`, schema, and seeded 3 tasks with transaction.
+2. `Stage 1: database read endpoints` — Migrated `GET /tasks` and `GET /tasks/:id` to SQL with parameterized queries.
+3. `Stage 2: insert into database` — Implemented `POST /tasks` with auto-increment ID generation and restart persistence.
+4. `Stage 3: update and delete with SQL` — Migrated `PUT` and `DELETE` endpoints with SQL parameterization and validation.
+5. `Stage 4: explored SQLite` — Executed manual SQL queries directly in `tasks.db` and verified real-time single-source-of-truth reflection.
+6. `Extras: search, filter, sort, and stats` — Added SQL LIKE search, status filter, sorting, `/stats`, and B-Tree indexes.
+7. `Stage 5: database documentation` — Comprehensive README documentation, DB Browser screenshot, test suite, and run commands.
+8. `Stage 6: AI vs me` — Quarantined AI migration review, diff analysis, and rematch.
