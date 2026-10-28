@@ -3,6 +3,7 @@ node_modules/
 .env.*
 !.env.example
 *.log
+credentials.json
 *.db
 *.db-journal
 *.db-wal

@@ -1,157 +1,121 @@
-﻿# Task API — A3: Postgres + Docker Compose
+# Task API — A4: Auth, Login & Protect
 
-Node.js, Express and `pg`. The SQLite storage from A2 has been replaced by a Postgres server. SQL stays in `db.js`; routes keep the existing JSON task shape (`id`, `title`, boolean `done`) and validation. Existing search, filter, sorting, statistics and Swagger routes are retained.
+Express API using Supabase Auth for signup, password login, token verification and logout. A reusable middleware protects the profile, dashboard and logout routes. Swagger UI supports Bearer authorization. The PostgreSQL task API from A3 is retained.
 
-## Run the whole stack
+## Quick start
 
-Install and start Docker Desktop with Linux containers and Docker Compose v2. No local Node.js or Postgres installation is needed.
+Requires Docker Desktop with Linux containers and Compose v2. For tests or local Node development, use Node.js 24+.
 
-PowerShell:
+1. Clone this repository and enter its directory.
+2. Copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell, `cp .env.example .env` in Bash). When upgrading an existing checkout, keep your `.env` and add the Supabase variables.
+3. Configure the Postgres password in both `POSTGRES_PASSWORD` and `DATABASE_URL`. Their usernames and database names must also match. Keep the hostname `db` when running in Docker. Use a URL-safe password or percent-encode it in `DATABASE_URL`.
+4. Create a free project in the [Supabase Dashboard](https://supabase.com/dashboard). Open **Connect** for the Project URL and publishable key, or **Settings → API Keys** for the key. A legacy `anon` key also works. Never use a `service_role` or secret key for this application.
+5. Add these values to `.env`:
 
-```powershell
-Copy-Item .env.example .env
+```dotenv
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your_anon_or_publishable_key
+PORT=3000
+```
+
+Use the API URL above, not the `supabase.com/dashboard/project/...` dashboard URL. Supabase's database password is separate from this app's local Postgres password; this app only uses Supabase for authentication.
+
+Start the whole stack with one command:
+
+```sh
 docker compose up --build
 ```
 
-Bash:
+Open [Swagger UI](http://localhost:3000/docs), [public info](http://localhost:3000/public/info), or [health](http://localhost:3000/health). Compose publishes port 3000; `PORT` applies when running Node directly. Startup configures the Supabase client and initializes the task database. A successful startup does not by itself prove Supabase credentials work; signup/login provide that check.
 
-```bash
-cp .env.example .env && docker compose up --build
-```
+**Email confirmation stays enabled.** Register with an address you control and click the confirmation link before logging in. In Supabase **Authentication → URL Configuration**, set the Site URL to `http://localhost:3000` for this practice project so the confirmation redirects back to the local API.
 
-After the initial build, `docker compose up` starts everything. Open [tasks](http://localhost:3000/tasks), [Swagger UI](http://localhost:3000/docs), or [health](http://localhost:3000/health).
+`.env` is ignored by Git and excluded from Docker builds. Only placeholders belong in `.env.example`. Passwords and tokens are never stored in the task database. Existing Postgres volumes keep their original credentials when `.env` is edited.
 
-`.env.example` provides runnable local placeholders. In `.env`, replace the password in both `POSTGRES_PASSWORD` and `DATABASE_URL` with the same local password. `POSTGRES_USER` and `POSTGRES_DB` must also match the URL. Use a URL-safe password, or percent-encode it in the URL. `.env` is ignored by Git and excluded from the Docker build.
+## API reference
 
-Inside Compose, `DATABASE_URL` uses `db:5432`, the database service name. Only the API port (3000) is published. The API waits for the database healthcheck and creates its schema before accepting requests. The database uses `postgres:17-alpine`; its named volume is mounted at `/var/lib/postgresql/data`.
+| Method | Path | Bearer token | Success | Expected errors |
+| --- | --- | --- | --- | --- |
+| POST | `/auth/signup` | No | 201, `{ "user": ... }` | 400 for missing/invalid credentials |
+| POST | `/auth/login` | No | 200, access and refresh tokens | 400 for missing fields; 401 for failed login |
+| POST | `/auth/logout` | Yes | 204, empty body | 401 for missing/invalid token |
+| GET | `/protected/profile` | Yes | 200, `id`, `email`, `created_at` | 401 for missing/invalid token |
+| GET | `/protected/dashboard` | Yes | 200, greeting and verified `user_id` | 401 for missing/invalid token |
+| GET | `/public/info` | No | 200, public greeting | — |
+| GET | `/tasks`, `/tasks/:id`, `/stats` | No | 200, task data/statistics | 404 for unknown task |
+| POST | `/tasks` | No | 201, task | 400 for invalid title |
+| PUT | `/tasks/:id` | No | 200, task | 400 for invalid input; 404 for unknown task |
+| DELETE | `/tasks/:id` | No | 204 | 404 for unknown task |
+| GET | `/health`, `/`, `/docs` | No | 200 | — |
 
-## API
+Auth routes return JSON errors under `error`. Missing, blank or non-string email/password fields return 400. Failed login returns `{ "error": "Invalid login credentials" }`. Missing/malformed headers return `{ "error": "Access token required" }`; invalid or expired tokens return `{ "error": "Invalid or expired token" }`. Supabase service failures and upstream rate limits return 503 with a generic error. Malformed JSON returns 400.
 
-| Method | Path | Result |
-| --- | --- | --- |
-| GET | `/tasks` | 200, array of tasks |
-| GET | `/tasks/:id` | 200, task; 404 if missing |
-| POST | `/tasks` | 201, created task; 400 for missing/blank title |
-| PUT | `/tasks/:id` | 200, updated task; 400 for invalid body; 404 if missing |
-| DELETE | `/tasks/:id` | 204, empty body; 404 if missing |
-| GET | `/stats` | 200, total/completed/pending counts |
-| GET | `/health` | 200, `{ "status": "ok" }` (process liveness) |
-| GET | `/docs` | Swagger UI |
-| GET | `/` | API metadata |
+Task routes retain their A3 public behavior; A4 authentication is demonstrated on `/protected/*` and `/auth/logout`. Task data is shared and has no per-user ownership rules. A3 schema, filters, persistence and local Postgres setup are documented in [the archived A3 README](docs/A3-README.md).
 
-POST accepts `{ "title": "Read Docker docs" }` and starts `done` at false, as in A2. PUT accepts either or both of `title` (nonblank string) and `done` (boolean). Unknown task IDs return `{ "error": "Task not found" }`. Malformed JSON returns 400 with a JSON error. Task IDs must be positive PostgreSQL integer IDs.
+## Try the authentication flow
 
-List options: `?search=curl`, `?done=true` (also false/1/0), and `?sort=title&order=desc`. Search is case-insensitive. Sort fields are allowlisted (`id`, `title`, `done`), and query values use `$1`, `$2`, etc. parameters.
-
-## Schema and initialization
-
-```sql
-CREATE TABLE IF NOT EXISTS tasks (
-  id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
-  done BOOLEAN NOT NULL DEFAULT FALSE
-);
-CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
-```
-
-Initialization runs in a transaction, protected by a Postgres advisory lock so simultaneous API startups do not duplicate seeds. Three tasks are inserted only when the table is empty: Learn HTTP basics (done), Build a CRUD API, and Test endpoints with curl. Restarting with existing tasks preserves them. If all tasks are deleted, the next API startup reseeds the empty table, following the assignment's empty-table rule.
-
-## Inspect the database and capture submission evidence
+In PowerShell, use `curl.exe` for curl commands. The following commands use a temporary JSON file to avoid Windows quoting issues. Replace the sample email and password with your test credentials:
 
 ```powershell
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+'{"email":"your-email@example.com","password":"choose-a-strong-password"}' | Set-Content -Encoding ascii credentials.json
+curl.exe -i -X POST http://localhost:3000/auth/signup -H "Content-Type: application/json" --data-binary '@credentials.json'
+# Click the Supabase email confirmation link before continuing.
+$session = Invoke-RestMethod -Method Post -Uri http://localhost:3000/auth/login -ContentType 'application/json' -InFile credentials.json
+$token = $session.access_token
+curl.exe -i http://localhost:3000/public/info
+curl.exe -i http://localhost:3000/protected/profile
+curl.exe -i http://localhost:3000/protected/profile -H "Authorization: Bearer $token"
+curl.exe -i http://localhost:3000/protected/dashboard -H "Authorization: Bearer $token"
+curl.exe -i http://localhost:3000/protected/profile -H "Authorization: Bearer invalid-token"
+curl.exe -i -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer $token"
+Remove-Item -LiteralPath credentials.json
 ```
 
-Inside psql:
+Expect 201 on signup, 200 on login/public/valid protected calls, 401 without a token or with a bad token, and 204 with an empty body on logout. `credentials.json` is git-ignored. Never capture session tokens in screenshots.
 
-```text
-\dt
-SELECT * FROM tasks ORDER BY id;
-\q
+The guard parses `Authorization: Bearer <token>` and calls `supabase.auth.getUser(token)` on every protected request. It trusts the verified Supabase user rather than decoding an unverified JWT payload. Every request uses a fresh SDK client with session persistence and refresh timers disabled, so one user's login cannot change another user's session.
+
+Logout calls `auth.admin.signOut(token, 'local')`, the SDK's token-based server logout method. It sends the caller's access token to Supabase's logout endpoint using the project's public key; no service-role key is needed. It revokes refresh tokens for that session. Already-issued access JWTs may remain valid until expiry; clients should discard both tokens after logout. See [Supabase sign-out behavior](https://supabase.com/docs/guides/auth/signout).
+
+## Swagger UI
+
+1. Open `/docs` and use **Try it out** on `/auth/signup`. Confirm the email, then execute `/auth/login`.
+2. Copy the login response's `access_token`.
+3. Click **Authorize**, paste only that token (without the `Bearer ` prefix), then click **Authorize** and **Close**.
+4. Execute `/protected/profile` and `/protected/dashboard`; both should return 200.
+5. Execute `/auth/logout`; expect 204. Clear Swagger authorization afterwards.
+
+Swagger supplies the header automatically. Only protected operations show authorization locks. The screenshot below is from the actual A4 Swagger page and shows route/security configuration; it does not prove a successful real-user login.
+
+![A4 Swagger UI with auth routes and Bearer authorization](docs/a4-swagger.png)
+
+## Tests and verification
+
+```sh
+npm ci
+npm test
 ```
 
-Verified containerized Postgres data is shown below. The screenshot was captured in a temporary read-only pgweb client connected to the Compose database; the normal stack still contains just API and database. The actual psql table listing and SELECT output are also saved in [docs/postgres-output.txt](docs/postgres-output.txt).
+The 16 auth tests use the real Supabase SDK with an isolated fake HTTP transport. They cover validation, signup, login, bearer parsing, invalid tokens, protected routes, concurrent-user isolation, token-specific logout, empty 204 responses and Swagger security declarations. They require neither a Supabase account nor a database.
 
-![Tasks stored in containerized PostgreSQL](docs/postgres.jpg)
+The existing 19 PostgreSQL integration tests run separately:
 
-Existing screenshots in the repository root are historical A1/A2 evidence.
-
-## CRUD and persistence checkpoint
-
-In PowerShell, use `curl.exe` to avoid the Windows PowerShell alias. In Bash, use `curl`.
-
-```powershell
-curl.exe -i http://localhost:3000/tasks
-'{"title":"Persistence checkpoint"}' | Set-Content -Encoding ascii task-payload.json
-curl.exe -i -X POST http://localhost:3000/tasks -H 'Content-Type: application/json' --data-binary '@task-payload.json'
+```sh
+npm run test:db
 ```
 
-Use the returned ID in place of `4` below (IDs are not reused):
+To repeat the real-service check, set `AUTH_TEST_EMAIL` and `AUTH_TEST_PASSWORD` in your ignored `.env`. For a new account run `npm run test:live -- --signup`, click the confirmation email, then run `npm run test:live`. The script checks real status codes, valid/tampered tokens and logout without printing credentials or tokens.
 
-```powershell
-'{"done":true}' | Set-Content -Encoding ascii task-payload.json
-curl.exe -i -X PUT http://localhost:3000/tasks/4 -H 'Content-Type: application/json' --data-binary '@task-payload.json'
-docker compose down
-docker compose up -d
-curl.exe -i http://localhost:3000/tasks/4
-curl.exe -i -X DELETE http://localhost:3000/tasks/4
-curl.exe -i http://localhost:3000/tasks/4
-```
+Set `TEST_DATABASE_URL` to a separate disposable PostgreSQL database first; these tests reset the task table. See the A3 README for local database networking. The A4 image build, 16 auth tests and all 19 PostgreSQL regression tests have passed. Real Supabase signup/login and Swagger execution are checked separately; see [A4 verification notes](docs/A4-verification.md).
 
-Wait for the API to start before sending requests after `up`. Expect 201, 200, 200 after restart, 204 with no body, and then 404. The named `taskdata` volume survives `docker compose down`. `docker compose down --volumes` deletes the database and starts fresh on the next run.
-
-Changing `.env` credentials after creating the volume does not change existing Postgres roles. Keep the existing credentials or explicitly reset a disposable volume.
-
-## Local Node development and tests
-
-Use Node.js 24+. To run Node outside Docker, publish the database to loopback temporarily with a Compose override (the normal stack does not expose it):
-
-```yaml
-# compose.local.yaml (optional)
-services:
-  db:
-    ports: ["127.0.0.1:5432:5432"]
-```
-
-```powershell
-docker compose -f compose.yaml -f compose.local.yaml up -d db
-npm.cmd ci
-```
-
-For `npm start`, set `DATABASE_URL` in the shell to the same URL with `localhost` instead of `db`. The start command also reads `.env`; an existing shell variable takes precedence.
-
-The integration suite resets the tasks table. Use a separate disposable database named `tasks_test`, never your application database:
-
-```powershell
-docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" tasks_test'
-$env:TEST_DATABASE_URL = 'postgres://postgres:YOUR_URL_ENCODED_PASSWORD@localhost:5432/tasks_test'
-npm.cmd test
-```
-
-Tests cover CRUD, validation, boolean values, malformed JSON, SQL injection inputs, filters, stats, partial updates and repeated/concurrent initialization. Missing `TEST_DATABASE_URL` fails before touching any database.
-
-## Verification status
-
-Docker build, CRUD, volume persistence through `down` / `up`, all 19 integration tests inside Docker, and startup from a clean Git clone have passed. See [verification notes](docs/verification.md) and [recorded results](docs/docker-verification.json). The optional A3 AI rematch is excluded.
+For local Node development, use `npm start` after `npm ci`. Configure `DATABASE_URL` for a reachable Postgres instance (use `localhost` with a loopback-published database port); Docker's `db` hostname is only available inside its network. Node loads `.env` automatically through the start script.
 
 ## References
 
-- [node-postgres parameterized queries](https://node-postgres.com/features/queries)
-- [Docker Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/)
+- [Supabase JavaScript signup](https://supabase.com/docs/reference/javascript/auth-signup)
+- [Supabase password login](https://supabase.com/docs/reference/javascript/auth-signinwithpassword)
+- [Supabase verified user retrieval](https://supabase.com/docs/reference/javascript/auth-getuser)
+- [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys)
+- [Swagger Bearer authentication](https://swagger.io/docs/specification/v3_0/authentication/bearer-authentication/)
 
-## Captured error response
-
-Actual `curl.exe -sS -i http://localhost:3000/tasks/999` output from the Docker Compose stack:
-
-```http
-HTTP/1.1 404 Not Found
-X-Powered-By: Express
-Content-Type: application/json; charset=utf-8
-Content-Length: 26
-ETag: W/"1a-D4dsL3U5Autp3bKNpxD/le70vNM"
-Date: Wed, 28 Oct 2026 20:47:17 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-
-{"error":"Task not found"}
-```
+The optional A4 AI rematch is excluded.
