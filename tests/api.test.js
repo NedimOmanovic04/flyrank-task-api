@@ -1,6 +1,10 @@
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+// Run only against an explicitly designated disposable test database.
+if (!process.env.TEST_DATABASE_URL) throw new Error('Set TEST_DATABASE_URL to a disposable Postgres database');
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+const { Pool } = require('pg');
 const app = require('../server');
 const db = require('../db');
 
@@ -34,14 +38,18 @@ function request(path, options = {}) {
   });
 }
 
-describe('Task API SQLite Integration Tests', () => {
+describe('Task API Postgres Integration Tests', () => {
   before(async () => {
-    // Reset database to initial seed state
-    db.exec("DELETE FROM tasks; DELETE FROM sqlite_sequence WHERE name='tasks';");
-    const insert = db.prepare('INSERT INTO tasks (id, title, done) VALUES (?, ?, ?)');
-    insert.run(1, 'Learn HTTP basics', 1);
-    insert.run(2, 'Build a CRUD API', 0);
-    insert.run(3, 'Test endpoints with curl', 0);
+    await db.initialize();
+    const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    try {
+      await admin.query('TRUNCATE tasks RESTART IDENTITY');
+    } finally {
+      await admin.end();
+    }
+    await db.initialize();
+    await db.initialize();
+    await db.initialize();
 
     await new Promise((resolve) => {
       server = app.listen(0, () => {
@@ -56,6 +64,7 @@ describe('Task API SQLite Integration Tests', () => {
     if (server) {
       await new Promise((resolve) => server.close(resolve));
     }
+    await db.close();
   });
 
   test('GET / returns API metadata', async () => {
@@ -96,7 +105,7 @@ describe('Task API SQLite Integration Tests', () => {
     assert.ok(res.body.error);
   });
 
-  test('POST /tasks creates task with 201 Created and persists in SQLite', async () => {
+  test('POST /tasks creates task with 201 Created and persists in Postgres', async () => {
     const res = await request('/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -108,10 +117,10 @@ describe('Task API SQLite Integration Tests', () => {
     assert.equal(res.body.done, false);
 
     // Verify directly in database
-    const row = db.prepare('SELECT * FROM tasks WHERE id = 4').get();
+    const row = await db.find(4);
     assert.ok(row);
     assert.equal(row.title, 'Write automated tests');
-    assert.equal(row.done, 0);
+    assert.equal(row.done, false);
   });
 
   test('POST /tasks rejects missing or empty title with 400', async () => {
@@ -140,9 +149,9 @@ describe('Task API SQLite Integration Tests', () => {
     assert.equal(res.body.title, 'Write automated tests with node:test');
     assert.equal(res.body.done, true);
 
-    const row = db.prepare('SELECT * FROM tasks WHERE id = 4').get();
+    const row = await db.find(4);
     assert.equal(row.title, 'Write automated tests with node:test');
-    assert.equal(row.done, 1);
+    assert.equal(row.done, true);
   });
 
   test('PUT /tasks/:id returns 404 for non-existent ID', async () => {
@@ -176,7 +185,7 @@ describe('Task API SQLite Integration Tests', () => {
     });
     assert.equal(res.status, 204);
 
-    const row = db.prepare('SELECT * FROM tasks WHERE id = 4').get();
+    const row = await db.find(4);
     assert.equal(row, undefined);
   });
 

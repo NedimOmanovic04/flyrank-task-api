@@ -38,76 +38,36 @@ app.get('/tasks/:id', asyncRoute(async (req, res) => {
   res.json(task);
 }));
 
-// Stage 2: insert into database
-app.post('/tasks', (req, res) => {
+app.post('/tasks', asyncRoute(async (req, res) => {
   const { title } = req.body || {};
-
-  if (!title || typeof title !== 'string' || title.trim() === '') {
+  if (typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required and must not be empty' });
   }
+  res.status(201).json(await db.create(title.trim()));
+}));
 
-  const trimmedTitle = title.trim();
-  const stmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  const info = stmt.run(trimmedTitle, 0);
-
-  const newTask = {
-    id: Number(info.lastInsertRowid),
-    title: trimmedTitle,
-    done: false
-  };
-
-  res.status(201).json(newTask);
-});
-
-// Stage 3: update and delete with SQL
-app.put('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const existingTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-
-  if (!existingTask) {
-    return res.status(404).json({ error: `Task ${req.params.id} not found` });
-  }
-
+app.put('/tasks/:id', asyncRoute(async (req, res) => {
+  const existing = await db.find(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Task not found' });
   const { title, done } = req.body || {};
-
   if (title === undefined && done === undefined) {
     return res.status(400).json({ error: 'At least title or done must be provided' });
   }
-
-  let newTitle = existingTask.title;
-  if (title !== undefined) {
-    if (typeof title !== 'string' || title.trim() === '') {
-      return res.status(400).json({ error: 'Title must be a non-empty string' });
-    }
-    newTitle = title.trim();
+  if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
+    return res.status(400).json({ error: 'Title must be a non-empty string' });
   }
-
-  let newDone = existingTask.done;
-  if (done !== undefined) {
-    if (typeof done !== 'boolean') {
-      return res.status(400).json({ error: 'Done must be a boolean' });
-    }
-    newDone = done ? 1 : 0;
+  if (done !== undefined && typeof done !== 'boolean') {
+    return res.status(400).json({ error: 'Done must be a boolean' });
   }
+  const task = await db.update(req.params.id, { title: title?.trim(), done });
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  res.json(task);
+}));
 
-  const updateStmt = db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?');
-  updateStmt.run(newTitle, newDone, taskId);
-
-  const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-  res.json(formatTask(updatedTask));
-});
-
-app.delete('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const stmt = db.prepare('DELETE FROM tasks WHERE id = ?');
-  const info = stmt.run(taskId);
-
-  if (info.changes === 0) {
-    return res.status(404).json({ error: `Task ${req.params.id} not found` });
-  }
-
+app.delete('/tasks/:id', asyncRoute(async (req, res) => {
+  if (!await db.remove(req.params.id)) return res.status(404).json({ error: 'Task not found' });
   res.status(204).send();
-});
+}));
 
 // Stage 5
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
