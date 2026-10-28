@@ -60,7 +60,49 @@
     },
     "/tasks": {
       "get": {
-        "summary": "Get all tasks",
+        "summary": "Get all tasks (with optional search, filter, and sort)",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search task title via SQL LIKE",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "done",
+            "in": "query",
+            "required": false,
+            "description": "Filter by completion status (true/false or 1/0)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Field to sort by (id, title, done)",
+            "schema": {
+              "type": "string",
+              "enum": ["id", "title", "done"],
+              "default": "id"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "Sort order (ASC, DESC)",
+            "schema": {
+              "type": "string",
+              "enum": ["ASC", "DESC"],
+              "default": "ASC"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of all tasks",
@@ -213,6 +255,23 @@
           }
         }
       }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Get task statistics computed via SQL",
+        "responses": {
+          "200": {
+            "description": "Task counts by status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -245,6 +304,15 @@
         "properties": {
           "error": { "type": "string", "example": "Task 99 not found" }
         }
+      },
+      "Stats": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer", "example": 3 },
+          "completed": { "type": "integer", "example": 1 },
+          "pending": { "type": "integer", "example": 2 }
+        },
+        "required": ["total", "completed", "pending"]
       }
     }
   }

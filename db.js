@@ -4,7 +4,7 @@ const path = require('path');
 const dbPath = path.resolve(__dirname, 'tasks.db');
 const db = new Database(dbPath);
 
-// Create tasks table if it does not exist
+// Create tasks table and indexes if they do not exist
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -12,6 +12,7 @@ db.exec(`
     done INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
+  CREATE INDEX IF NOT EXISTS idx_tasks_title ON tasks(title);
 `);
 
 // Seed three example tasks only if table is empty

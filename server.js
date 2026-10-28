@@ -14,7 +14,7 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Task API',
     version: '1.0',
-    endpoints: ['/tasks']
+    endpoints: ['/tasks', '/stats', '/docs']
   });
 });
 
@@ -28,10 +28,47 @@ const formatTask = (task) => ({
   done: Boolean(task.done)
 });
 
-// Stage 1: read from database
+// Stage 1 & Extras: read tasks with optional search, filter, and sort
 app.get('/tasks', (req, res) => {
-  const rows = db.prepare('SELECT * FROM tasks').all();
+  const { search, done, sort, order } = req.query;
+
+  let query = 'SELECT * FROM tasks WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    query += ' AND title LIKE ?';
+    params.push(`%${search}%`);
+  }
+
+  if (done !== undefined) {
+    if (done === 'true' || done === '1') {
+      query += ' AND done = 1';
+    } else if (done === 'false' || done === '0') {
+      query += ' AND done = 0';
+    }
+  }
+
+  const allowedSortFields = ['id', 'title', 'done'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'id';
+  const sortOrder = order && order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+  query += ` ORDER BY ${sortField} ${sortOrder}`;
+
+  const rows = db.prepare(query).all(...params);
   res.json(rows.map(formatTask));
+});
+
+// Extras: Real database statistics computed via SQL
+app.get('/stats', (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) as count FROM tasks').get().count;
+  const completed = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE done = 1').get().count;
+  const pending = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE done = 0').get().count;
+
+  res.json({
+    total,
+    completed,
+    pending
+  });
 });
 
 app.get('/tasks/:id', (req, res) => {
