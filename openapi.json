@@ -3,7 +3,7 @@
   "info": {
     "title": "Task API",
     "version": "1.0.0",
-    "description": "In-memory CRUD API for managing a to-do list"
+    "description": "PostgreSQL CRUD API for managing a to-do list, started with Docker Compose"
   },
   "servers": [
     {

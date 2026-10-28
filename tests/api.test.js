@@ -184,6 +184,7 @@ describe('Task API Postgres Integration Tests', () => {
       method: 'DELETE'
     });
     assert.equal(res.status, 204);
+    assert.equal(res.text, '');
 
     const row = await db.find(4);
     assert.equal(row, undefined);
@@ -226,5 +227,43 @@ describe('Task API Postgres Integration Tests', () => {
       completed: 1,
       pending: 2
     });
+  });
+
+  test('SQL input remains data and invalid IDs return JSON 404', async () => {
+    const title = "Robert'); DROP TABLE tasks; --";
+    const created = await request('/tasks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { title }
+    });
+    assert.equal(created.status, 201);
+    assert.equal((await db.find(created.body.id)).title, title);
+    const search = await request('/tasks?search=' + encodeURIComponent("' OR TRUE --"));
+    assert.equal(search.status, 200);
+    assert.equal(search.body.length, 0);
+    for (const id of ['abc', '1x', '2147483648', '-1']) {
+      const result = await request('/tasks/' + id);
+      assert.equal(result.status, 404);
+      assert.deepEqual(result.body, { error: 'Task not found' });
+    }
+    await request('/tasks/' + created.body.id, { method: 'DELETE' });
+  });
+
+  test('malformed JSON returns a JSON 400 response', async () => {
+    const result = await request('/tasks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{broken'
+    });
+    assert.equal(result.status, 400);
+    assert.deepEqual(result.body, { error: 'Invalid JSON body' });
+  });
+
+  test('partial updates preserve other fields and repeated initialization preserves rows', async () => {
+    const result = await request('/tasks/2', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { done: true }
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.title, 'Build a CRUD API');
+    assert.equal(result.body.done, true);
+    await Promise.all([db.initialize(), db.initialize(), db.initialize()]);
+    assert.equal((await db.list()).length, 3);
+    assert.equal((await db.find(2)).done, true);
   });
 });

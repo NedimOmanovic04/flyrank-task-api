@@ -1,10 +1,10 @@
 {
   "name": "task-api",
   "version": "1.0.0",
-  "description": "Task API - W3 A2 SQLite Database CRUD API",
+  "description": "Task API - A3 PostgreSQL and Docker Compose",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test tests/api.test.js"
   },
   "keywords": [
