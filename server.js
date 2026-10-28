@@ -18,7 +18,8 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Task API',
     version: '1.0',
-    endpoints: ['/tasks', '/stats', '/docs']
+    endpoints: ['/tasks', '/stats', '/auth/signup', '/auth/login', '/auth/logout',
+      '/public/info', '/protected/profile', '/protected/dashboard', '/docs']
   });
 });
 
