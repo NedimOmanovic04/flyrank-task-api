@@ -50,7 +50,7 @@ app.get('/tasks/:id', (req, res) => {
   res.json(formatTask(task));
 });
 
-// Stage 3
+// Stage 2: insert into database
 app.post('/tasks', (req, res) => {
   const { title } = req.body || {};
 
@@ -58,15 +58,16 @@ app.post('/tasks', (req, res) => {
     return res.status(400).json({ error: 'Title is required and must not be empty' });
   }
 
-  const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+  const trimmedTitle = title.trim();
+  const stmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
+  const info = stmt.run(trimmedTitle, 0);
 
   const newTask = {
-    id: nextId,
-    title: title.trim(),
+    id: Number(info.lastInsertRowid),
+    title: trimmedTitle,
     done: false
   };
 
-  tasks.push(newTask);
   res.status(201).json(newTask);
 });
 
