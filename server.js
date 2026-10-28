@@ -4,7 +4,8 @@ const swaggerDocument = require('./openapi.json');
 const db = require('./db');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 app.use(express.json());
 
@@ -22,65 +23,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Helper to ensure response shape matches Assignment 1 (boolean done)
-const formatTask = (task) => ({
-  ...task,
-  done: Boolean(task.done)
-});
+// Routes handle HTTP; all SQL lives in the repository.
+app.get('/tasks', asyncRoute(async (req, res) => {
+  res.json(await db.list(req.query));
+}));
 
-// Stage 1 & Extras: read tasks with optional search, filter, and sort
-app.get('/tasks', (req, res) => {
-  const { search, done, sort, order } = req.query;
+app.get('/stats', asyncRoute(async (req, res) => {
+  res.json(await db.stats());
+}));
 
-  let query = 'SELECT * FROM tasks WHERE 1=1';
-  const params = [];
-
-  if (search) {
-    query += ' AND title LIKE ?';
-    params.push(`%${search}%`);
-  }
-
-  if (done !== undefined) {
-    if (done === 'true' || done === '1') {
-      query += ' AND done = 1';
-    } else if (done === 'false' || done === '0') {
-      query += ' AND done = 0';
-    }
-  }
-
-  const allowedSortFields = ['id', 'title', 'done'];
-  const sortField = allowedSortFields.includes(sort) ? sort : 'id';
-  const sortOrder = order && order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-
-  query += ` ORDER BY ${sortField} ${sortOrder}`;
-
-  const rows = db.prepare(query).all(...params);
-  res.json(rows.map(formatTask));
-});
-
-// Extras: Real database statistics computed via SQL
-app.get('/stats', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as count FROM tasks').get().count;
-  const completed = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE done = 1').get().count;
-  const pending = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE done = 0').get().count;
-
-  res.json({
-    total,
-    completed,
-    pending
-  });
-});
-
-app.get('/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-
-  if (!task) {
-    return res.status(404).json({ error: `Task ${req.params.id} not found` });
-  }
-
-  res.json(formatTask(task));
-});
+app.get('/tasks/:id', asyncRoute(async (req, res) => {
+  const task = await db.find(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  res.json(task);
+}));
 
 // Stage 2: insert into database
 app.post('/tasks', (req, res) => {
@@ -156,9 +112,26 @@ app.delete('/tasks/:id', (req, res) => {
 // Stage 5
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+  if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large' });
+  console.error('Request failed:', error.message);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+  db.initialize().then(() => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log('Task API listening on port ' + PORT);
+    });
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      process.once(signal, () => server.close(() => db.close().then(() => process.exit(0))));
+    }
+  }).catch(async (error) => {
+    console.error('Database initialization failed:', error.message);
+    await db.close();
+    process.exitCode = 1;
   });
 }
 
