@@ -106,7 +106,7 @@ npm run test:db
 
 To repeat the real-service check, set `AUTH_TEST_EMAIL` and `AUTH_TEST_PASSWORD` in your ignored `.env`. For a new account run `npm run test:live -- --signup`, click the confirmation email, then run `npm run test:live`. The script checks real status codes, valid/tampered tokens and logout without printing credentials or tokens.
 
-Set `TEST_DATABASE_URL` to a separate disposable PostgreSQL database first; these tests reset the task table. See the A3 README for local database networking. The A4 image build, 16 auth tests and all 19 PostgreSQL regression tests have passed. Real Supabase signup/login and Swagger execution are checked separately; see [A4 verification notes](docs/A4-verification.md).
+Set `TEST_DATABASE_URL` to a separate disposable PostgreSQL database first; these tests reset the task table. See the A3 README for local database networking. The A4 image build, 16 auth tests and all 19 PostgreSQL regression tests have passed. The confirmed-email signup/login flow, valid and tampered tokens, and logout also passed against real Supabase, including curl and Swagger UI checks. See [A4 verification notes](docs/A4-verification.md).
 
 For local Node development, use `npm start` after `npm ci`. Configure `DATABASE_URL` for a reachable Postgres instance (use `localhost` with a loopback-published database port); Docker's `db` hostname is only available inside its network. Node loads `.env` automatically through the start script.
 
