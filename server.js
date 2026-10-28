@@ -8,11 +8,6 @@ const PORT = 3000;
 
 app.use(express.json());
 
-let tasks = [
-  { id: 1, title: 'Learn HTTP basics', done: true },
-  { id: 2, title: 'Build a CRUD API', done: false },
-  { id: 3, title: 'Test endpoints with curl', done: false }
-];
 
 // Stage 1
 app.get('/', (req, res) => {
@@ -71,12 +66,12 @@ app.post('/tasks', (req, res) => {
   res.status(201).json(newTask);
 });
 
-// Stage 4
+// Stage 3: update and delete with SQL
 app.put('/tasks/:id', (req, res) => {
   const taskId = parseInt(req.params.id, 10);
-  const task = tasks.find(t => t.id === taskId);
+  const existingTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
 
-  if (!task) {
+  if (!existingTask) {
     return res.status(404).json({ error: `Task ${req.params.id} not found` });
   }
 
@@ -86,32 +81,38 @@ app.put('/tasks/:id', (req, res) => {
     return res.status(400).json({ error: 'At least title or done must be provided' });
   }
 
+  let newTitle = existingTask.title;
   if (title !== undefined) {
     if (typeof title !== 'string' || title.trim() === '') {
       return res.status(400).json({ error: 'Title must be a non-empty string' });
     }
-    task.title = title.trim();
+    newTitle = title.trim();
   }
 
+  let newDone = existingTask.done;
   if (done !== undefined) {
     if (typeof done !== 'boolean') {
       return res.status(400).json({ error: 'Done must be a boolean' });
     }
-    task.done = done;
+    newDone = done ? 1 : 0;
   }
 
-  res.json(task);
+  const updateStmt = db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?');
+  updateStmt.run(newTitle, newDone, taskId);
+
+  const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+  res.json(formatTask(updatedTask));
 });
 
 app.delete('/tasks/:id', (req, res) => {
   const taskId = parseInt(req.params.id, 10);
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
+  const stmt = db.prepare('DELETE FROM tasks WHERE id = ?');
+  const info = stmt.run(taskId);
 
-  if (taskIndex === -1) {
+  if (info.changes === 0) {
     return res.status(404).json({ error: `Task ${req.params.id} not found` });
   }
 
-  tasks.splice(taskIndex, 1);
   res.status(204).send();
 });
 
