@@ -1,0 +1,13 @@
+         List of relations
+ Schema | Name  | Type  |  Owner   
+--------+-------+-------+----------
+ public | tasks | table | postgres
+(1 row)
+
+ id |          title           | done 
+----+--------------------------+------
+  1 | Learn HTTP basics        | t
+  2 | Build a CRUD API         | f
+  3 | Test endpoints with curl | f
+(3 rows)
+

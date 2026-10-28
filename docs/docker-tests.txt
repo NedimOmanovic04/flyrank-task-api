@@ -1,0 +1,29 @@
+▶ Task API Postgres Integration Tests
+  ✔ GET / returns API metadata (21.776847ms)
+  ✔ GET /health returns status ok (4.36595ms)
+  ✔ GET /tasks returns all 3 seeded tasks with boolean done (5.687995ms)
+  ✔ GET /tasks/:id returns single task (11.175683ms)
+  ✔ GET /tasks/:id returns 404 for non-existent task (6.41592ms)
+  ✔ POST /tasks creates task with 201 Created and persists in Postgres (22.341567ms)
+  ✔ POST /tasks rejects missing or empty title with 400 (5.850101ms)
+  ✔ PUT /tasks/:id updates title and done with 200 OK (7.87137ms)
+  ✔ PUT /tasks/:id returns 404 for non-existent ID (2.965202ms)
+  ✔ PUT /tasks/:id returns 400 for empty update body or invalid types (5.477988ms)
+  ✔ DELETE /tasks/:id removes task with 204 No Content (5.992805ms)
+  ✔ DELETE /tasks/:id returns 404 for already deleted or missing ID (1.75936ms)
+  ✔ Extras: GET /tasks?search=curl returns matching task (4.08734ms)
+  ✔ Extras: GET /tasks?done=true filters completed tasks (3.072606ms)
+  ✔ Extras: GET /tasks?sort=title sorts alphabetically (3.458318ms)
+  ✔ Extras: GET /stats returns real database counts via SQL (2.786196ms)
+  ✔ SQL input remains data and invalid IDs return JSON 404 (16.61737ms)
+  ✔ malformed JSON returns a JSON 400 response (4.400551ms)
+  ✔ partial updates preserve other fields and repeated initialization preserves rows (27.467842ms)
+✔ Task API Postgres Integration Tests (280.067007ms)
+ℹ tests 19
+ℹ suites 1
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 291.182688

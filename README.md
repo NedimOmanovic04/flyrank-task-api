@@ -70,7 +70,11 @@ SELECT * FROM tasks ORDER BY id;
 \q
 ```
 
-Capture a screenshot showing `\dt` and the SELECT result, save it as `docs/postgres.png`, and add it to Git. Existing screenshots in the repository are historical A1/A2 evidence, not Postgres evidence.
+Verified containerized Postgres data is shown below. The screenshot was captured in a temporary read-only pgweb client connected to the Compose database; the normal stack still contains just API and database. The actual psql table listing and SELECT output are also saved in [docs/postgres-output.txt](docs/postgres-output.txt).
+
+![Tasks stored in containerized PostgreSQL](docs/postgres.jpg)
+
+Existing screenshots in the repository root are historical A1/A2 evidence.
 
 ## CRUD and persistence checkpoint
 
@@ -128,7 +132,7 @@ Tests cover CRUD, validation, boolean values, malformed JSON, SQL injection inpu
 
 ## Verification status
 
-See [verification notes](docs/verification.md) for the checks actually performed and remaining Docker/submission evidence. The optional A3 AI rematch is excluded.
+Docker build, CRUD, volume persistence through `down` / `up`, all 19 integration tests inside Docker, and startup from a clean Git clone have passed. See [verification notes](docs/verification.md) and [recorded results](docs/docker-verification.json). The optional A3 AI rematch is excluded.
 
 ## References
 
@@ -137,7 +141,7 @@ See [verification notes](docs/verification.md) for the checks actually performed
 
 ## Captured error response
 
-Actual `curl.exe -sS -i http://127.0.0.1:33079/tasks/999` output from the native Postgres verification run (temporary API port):
+Actual `curl.exe -sS -i http://localhost:3000/tasks/999` output from the Docker Compose stack:
 
 ```http
 HTTP/1.1 404 Not Found
@@ -145,7 +149,7 @@ X-Powered-By: Express
 Content-Type: application/json; charset=utf-8
 Content-Length: 26
 ETag: W/"1a-D4dsL3U5Autp3bKNpxD/le70vNM"
-Date: Wed, 28 Oct 2026 18:34:20 GMT
+Date: Wed, 28 Oct 2026 20:47:17 GMT
 Connection: keep-alive
 Keep-Alive: timeout=5
 

@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-28",
+  "checks": [
+    "Fresh Compose stack automatically creates and seeds three tasks",
+    "Containerized API returns correct validation, create and update status codes",
+    "Created and updated row survives docker compose down then up",
+    "Delete returns empty 204 and subsequent GET returns 404",
+    "All 19 integration tests pass inside the API container against Postgres 17",
+    "Clean Git clone plus copied .env.example starts with docker compose up and returns three seeds"
+  ],
+  "docker": "29.9.2",
+  "compose": "5.6.1",
+  "database": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+  "rows": [
+    {
+      "id": 1,
+      "title": "Learn HTTP basics",
+      "done": true
+    },
+    {
+      "id": 2,
+      "title": "Build a CRUD API",
+      "done": false
+    },
+    {
+      "id": 3,
+      "title": "Test endpoints with curl",
+      "done": false
+    }
+  ]
+}
