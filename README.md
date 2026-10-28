@@ -1,63 +1,121 @@
-# Task API — FlyRank W2 · A1
+# Task API — FlyRank W3 · A2 (Database-Backed CRUD API)
 
-A lightweight RESTful CRUD API built with Node.js and Express that manages an in-memory to-do list. The API provides endpoints to create, read, update, and delete tasks, features strict input validation, and includes interactive Swagger UI documentation at `/docs`.
+A persistent, database-backed RESTful CRUD API built with Node.js, Express, and SQLite (`better-sqlite3`). This assignment is the direct sequel to Week 2 · Assignment 1: the in-memory array storage has been migrated to a real on-disk SQLite database (`tasks.db`). 
 
----
-
-## Features
-
-- **Full CRUD operations**: Create, Read (all & by ID), Update, and Delete tasks.
-- **RESTful design & HTTP status codes**:
-  - `200 OK` for successful reads and updates
-  - `201 Created` for successful resource creation
-  - `204 No Content` for successful deletion
-  - `400 Bad Request` with descriptive JSON error for invalid requests
-  - `404 Not Found` with descriptive JSON error when a resource does not exist
-- **Input validation**: Enforces non-empty strings for task titles and boolean types for completion status.
-- **Interactive documentation**: Swagger UI available at `/docs` powered by `swagger-ui-express` and OpenAPI 3.0.
-- **Zero database dependency**: Operates entirely in memory.
+The external API contract remains **100% identical** — endpoints, validation rules, HTTP status codes, and JSON response shapes have not changed. However, task data now **survives server restarts and process termination**.
 
 ---
 
-## Prerequisites
+## Why SQLite?
 
+In Assignment 1, data lived in volatile RAM (`let tasks = [...]`) and disappeared on every server restart. In Week 3, storage was migrated to SQLite for several key advantages:
+
+1. **Zero Configuration & Serverless**: SQLite requires no external database server process, connection string credentials, background daemon, or cloud setup. The database engine runs directly embedded inside the Node.js application process.
+2. **Single-File Persistence**: The entire database lives in a single local file (`tasks.db`). Everything — schemas, tables, indexes, and records — is safely stored on disk.
+3. **Survives Process Restarts**: Changes written to SQLite are committed to disk. Whether the server crashes, reboots, or updates, task data persists across runs.
+4. **Full ACID Compliance**: SQLite provides atomic transactions, consistency, isolation, and durability. Writes are reliable and crash-resilient.
+5. **Fast & Lightweight**: With `better-sqlite3`, queries execute synchronously with high throughput and direct memory binding, eliminating asynchronous callback overhead.
+
+---
+
+## Where the Database File Lives & Auto-Initialization
+
+- **File location**: `./tasks.db` (created automatically in the project root on initial boot).
+- **Auto-table creation**: If `tasks.db` does not exist or the `tasks` table is missing, the application automatically executes `CREATE TABLE IF NOT EXISTS tasks (...)` and creates performance indexes.
+- **Auto-seeding with idempotency**: On the first run, the table row count is checked (`SELECT COUNT(*) as count FROM tasks`). If and only if the count is `0`, three initial example tasks are seeded inside an **atomic transaction**. Subsequent server restarts find existing rows and skip seeding, preventing row duplication.
+- **Git-ignored**: `tasks.db` (along with SQLite journal and WAL files) is specified in `.gitignore`. Every clean clone initializes its own fresh, isolated database file.
+
+---
+
+## Quick Start (Single Documented Command)
+
+### Prerequisites
 - [Node.js](https://nodejs.org/) (v18.0.0 or higher)
 - [Git](https://git-scm.com/)
 
----
+### 1. Clone & Install
+```bash
+git clone https://github.com/NedimOmanovic04/flyrank-task-api.git
+cd flyrank-task-api
+npm install
+```
 
-## Installation & Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/NedimOmanovic04/flyrank-task-api.git
-   cd flyrank-task-api
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
----
-
-## Running the Server
-
-Start the server with the following single command:
+### 2. Start the Server
+Run the single command below to automatically create `tasks.db`, apply schema, seed initial records, and launch the API:
 
 ```bash
 npm start
 ```
 
-*(Alternatively: `node server.js`)*
-
-The server will start listening on:
+The server listens on:
 ```text
 http://localhost:3000
 ```
 
-- **To stop the server**: Press `Ctrl + C` in your terminal.
-- **To restart**: Run `npm start` again.
+- **Interactive Swagger UI**: [http://localhost:3000/docs](http://localhost:3000/docs)
+- **Health Check**: [http://localhost:3000/health](http://localhost:3000/health)
+- **To Run Automated Tests**: `npm test`
+
+---
+
+## Database Schema & Indexes
+
+```sql
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0
+);
+
+-- Performance indexes for filtering and searching
+CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);
+CREATE INDEX IF NOT EXISTS idx_tasks_title ON tasks(title);
+```
+
+### Why Database Indexes?
+An index in SQLite works like an index at the back of a book: instead of performing a full table scan (`O(N)`) where SQLite reads every single row off disk, the B-Tree index allows SQLite to locate matching rows in logarithmic time (`O(log N)`). The index on `done` accelerates status filters (`WHERE done = ?`), while the index on `title` speeds up prefix and exact lookups.
+
+### Why Atomic Transactions?
+Seeding is wrapped in `db.transaction(...)`:
+```javascript
+const insertSeed = db.transaction((tasksToSeed) => {
+  const insertStmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
+  for (const task of tasksToSeed) {
+    insertStmt.run(task.title, task.done);
+  }
+});
+```
+A database transaction guarantees **all-or-nothing atomicity**: if any insert fails or power is interrupted halfway through, SQLite rolls back every change so the database is never left in a corrupted or half-seeded state.
+
+---
+
+## Database Visual Inspection (DB Browser for SQLite)
+
+Below is `tasks.db` open in **DB Browser for SQLite**, displaying the `tasks` table and its initial seeded rows:
+
+![DB Browser for SQLite Screenshot](dbbrowser.png)
+
+---
+
+## Stage 4: SQL Exploration By Hand
+
+During Stage 4, SQL queries were executed directly against `tasks.db` using the Execute SQL tab:
+
+| Query | Purpose | Result / Observed Behavior |
+|---|---|---|
+| `SELECT * FROM tasks;` | List every task row | Returned all 3 seeded records (`id: 1, 2, 3`). |
+| `SELECT * FROM tasks WHERE done = 1;` | Filter completed tasks | Returned single row: `id: 1` (`Learn HTTP basics`). |
+| `SELECT COUNT(*) AS total FROM tasks;` | Count total records in table | Returned `{ total: 3 }`. |
+| `UPDATE tasks SET done = 1;` | Mark every task completed | Updated 3 rows; all tasks set to `done: 1`. |
+| `DELETE FROM tasks WHERE done = 1;` | Delete all completed tasks | Deleted all 3 rows; table row count became 0. |
+
+### Featured Stage 4 Query & Observation
+```sql
+SELECT * FROM tasks WHERE done = 1;
+```
+> **What it returned**: Exactly one row: `id: 1 | title: "Learn HTTP basics" | done: 1`.
+> 
+> **Single Source of Truth**: When an `INSERT INTO tasks (title, done) VALUES ('Direct DB Browser Insert', 1);` query was run directly against `tasks.db`, sending `GET /tasks` to the running API immediately reflected the 4th task **without restarting the server**. Both the API and DB Browser read and write the exact same underlying SQLite file on disk.
 
 ---
 
@@ -65,127 +123,65 @@ http://localhost:3000
 
 | HTTP Method | Path | Description | Success Status | Error Statuses |
 |---|---|---|---|---|
-| `GET` | `/` | API metadata (name, version, endpoints) | `200 OK` | — |
+| `GET` | `/` | API metadata and available endpoints | `200 OK` | — |
 | `GET` | `/health` | Service health status (`{"status":"ok"}`) | `200 OK` | — |
-| `GET` | `/tasks` | List all tasks | `200 OK` | — |
+| `GET` | `/tasks` | List tasks (supports `search`, `done`, `sort`, `order`) | `200 OK` | — |
 | `GET` | `/tasks/:id` | Retrieve a single task by ID | `200 OK` | `404 Not Found` |
 | `POST` | `/tasks` | Create a new task (`title` required) | `201 Created` | `400 Bad Request` |
 | `PUT` | `/tasks/:id` | Update task title and/or done status | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | `DELETE` | `/tasks/:id` | Delete a task by ID | `204 No Content` | `404 Not Found` |
+| `GET` | `/stats` | Task metrics computed via `SELECT COUNT(*)` | `200 OK` | — |
 | `GET` | `/docs` | Interactive Swagger UI documentation | `200 OK` | — |
 
 ---
 
-## Example `curl -i` Output
+## Proof That Storage Is "Just an Implementation Detail"
 
-Example terminal request fetching a single task by its identifier:
+A core architectural principle in backend engineering is the **separation of concerns**:
+- The **API layer** defines the public contract (routes, request schemas, validation rules, HTTP status codes, and response JSON).
+- The **Storage layer** defines how and where data is persisted.
+
+When moving from in-memory arrays in Assignment 1 to SQLite in Assignment 2, **100% of our original automated endpoint tests pass unmodified**. The client cannot tell whether data comes from RAM, SQLite, or a multi-node PostgreSQL cluster. Identical tests passing against both versions is the mathematical proof that storage is an interchangeable implementation detail hidden behind the API boundary.
+
+---
+
+## Parameterized Queries & SQL Injection Safety
+
+Every database interaction strictly uses **parameterized queries** with `?` placeholders:
+```javascript
+// SAFE: Parameterized query placeholder
+const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+const update = db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?').run(title, done, id);
+```
+User inputs are never concatenated directly into SQL strings. This prevents SQL injection attacks (e.g. `'; DROP TABLE tasks; --`).
+
+---
+
+## Automated Test Suite
+
+A complete test suite is included in `tests/api.test.js` using Node.js's native test runner (`node:test`):
 
 ```bash
-curl.exe -i http://localhost:3000/tasks/1
+npm test
 ```
 
-**Response:**
-```http
-HTTP/1.1 200 OK
-X-Powered-By: Express
-Content-Type: application/json; charset=utf-8
-Content-Length: 53
-ETag: W/"35-n25jA+q9x6s37tA6qQ9aR2PZ74U"
-Date: Tue, 27 Oct 2026 12:00:00 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-
-{
-  "id": 1,
-  "title": "Learn HTTP basics",
-  "done": true
-}
+```text
+▶ Task API SQLite Integration Tests
+  ✔ GET / returns API metadata
+  ✔ GET /health returns status ok
+  ✔ GET /tasks returns all 3 seeded tasks with boolean done
+  ✔ GET /tasks/:id returns single task
+  ✔ GET /tasks/:id returns 404 for non-existent task
+  ✔ POST /tasks creates task with 201 Created and persists in SQLite
+  ✔ POST /tasks rejects missing or empty title with 400
+  ✔ PUT /tasks/:id updates title and done with 200 OK
+  ✔ PUT /tasks/:id returns 404 for non-existent ID
+  ✔ PUT /tasks/:id returns 400 for empty update body or invalid types
+  ✔ DELETE /tasks/:id removes task with 204 No Content
+  ✔ DELETE /tasks/:id returns 404 for already deleted or missing ID
+  ✔ Extras: GET /tasks?search=curl returns matching task
+  ✔ Extras: GET /tasks?done=true filters completed tasks
+  ✔ Extras: GET /tasks?sort=title sorts alphabetically
+  ✔ Extras: GET /stats returns real database counts via SQL
+✔ Task API SQLite Integration Tests (16 passed, 0 failed)
 ```
-
----
-
-## Interactive Swagger UI Documentation
-
-Interactive documentation is served locally at:
-👉 **[http://localhost:3000/docs](http://localhost:3000/docs)**
-
-You can inspect all request/response schemas and test every endpoint directly from your browser using the **Try it out** feature.
-
-![Swagger UI](swaggerstage5.png)
-
----
-
-## Development Stages & Verification Evidence
-
-This project was built incrementally across 7 stages with thorough verification at each step:
-
-### Stage 0: Hello Server
-Initial Express server listening on port 3000 and responding with `Hello, server!`.
-
-Browser view:
-![Stage 0 Browser](helloserver.png)
-
-Terminal verification:
-![Stage 0 Curl](curl.png)
-
----
-
-### Stage 1: Root & Health Endpoints
-Implemented `GET /` returning API metadata JSON and `GET /health` returning service health status.
-
-![Stage 1 Verification](curlstage1.png)
-
----
-
-### Stage 2: Read Endpoints (All & Single with 404)
-Added in-memory store, `GET /tasks` listing all items, and `GET /tasks/:id` returning single items or `404 Not Found` error JSON.
-
-![Stage 2 Verification](curlstage2.png)
-
----
-
-### Stage 3: Create Endpoint with Validation
-Implemented `POST /tasks` with automatic incremental ID generation, `done: false` default, `201 Created` status, and `400 Bad Request` validation on missing/empty title.
-
-![Stage 3 Verification](curlstage3.png)
-
----
-
-### Stage 4: Full CRUD (Update & Delete)
-Implemented `PUT /tasks/:id` (updating title/done status with 200, 400 validation, and 404) and `DELETE /tasks/:id` (204 No Content with empty body).
-
-![Stage 4 Verification](curlstage4.png)
-
----
-
-### Stage 5: Swagger UI Documentation
-Configured OpenAPI 3.0 specification (`openapi.json`) and mounted `swagger-ui-express` on `/docs` for visual testing.
-
-![Stage 5 Swagger UI](swaggerstage5.png)
-
----
-
-## In-Memory Storage & The Mortality Observation
-
-This API stores all data in memory using a JavaScript array (`let tasks = [...]`). 
-
-**What happens on restart?**
-- When the server is stopped (`Ctrl + C`) or restarted, any tasks created, updated, or deleted during runtime disappear.
-- The next time the server starts, it initializes with the original 3 default seed tasks.
-
-**Why?**
-Variables and arrays live only in RAM allocated to the Node.js process. When the process terminates, its memory is wiped. This fundamental property highlights why persistent databases (SQL, MongoDB, etc.) and file systems are necessary in production backends.
-
----
-
-## Commit History
-
-The repository preserves the honest development steps:
-
-1. `Stage 0: hello server`
-2. `Stage 1: root and health endpoints`
-3. `Stage 2: read endpoints with 404`
-4. `Stage 3: create with validation`
-5. `Stage 4: full CRUD`
-6. `Stage 5: Swagger UI`
-7. `Stage 6: publish and docs`

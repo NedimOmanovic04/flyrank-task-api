@@ -1,10 +1,11 @@
 {
   "name": "task-api",
   "version": "1.0.0",
-  "description": "Task API - W2 A1 CRUD API assignment",
+  "description": "Task API - W3 A2 SQLite Database CRUD API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test tests/api.test.js"
   },
   "keywords": [
     "express",
