@@ -43,12 +43,15 @@ function createAuthRouter(clientFactory = createSupabaseClient) {
     res.json({ message: 'Welcome stranger! This info is public.' });
   });
 
-  router.get('/protected/profile', (req, res) => {
+  router.get('/protected/profile', asyncRoute(async (req, res) => {
     const match = /^Bearer[\t ]+([^\s]+)$/i.exec(req.get('Authorization') || '');
     if (!match) return res.status(401).json({ error: 'Access token required' });
-    // Fail closed until Supabase verification is added in Stage 3.
-    res.status(401).json({ error: 'Invalid or expired token' });
-  });
+    const { data, error } = await clientFactory().auth.getUser(match[1]);
+    if (unavailable(error)) return res.status(503).json({ error: 'Authentication service unavailable' });
+    if (error || !data.user) return res.status(401).json({ error: 'Invalid or expired token' });
+    const { id, email, created_at } = data.user;
+    res.json({ id, email, created_at });
+  }));
 
   return router;
 }
