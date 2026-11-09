@@ -1,13 +1,19 @@
 import { load } from 'cheerio';
 import { first, getPage } from './fetch.js';
 
-export async function discover() {
+export async function discover(onFailure) {
   const books = new Map();
   let url = first;
   let pages = 0;
   let discovered = 0;
   while (url && pages < 3) {
-    const { html } = await getPage(url, 'catalogue-page-' + (pages + 1) + '.html');
+    let html;
+    try {
+      ({ html } = await getPage(url, 'catalogue-page-' + (pages + 1) + '.html'));
+    } catch (err) {
+      onFailure(url, err);
+      break;
+    }
     const $ = load(html);
     pages++;
     for (const link of $('.product_pod h3 a[href]')) {
@@ -21,3 +27,4 @@ export async function discover() {
   console.log('catalogue_pages=' + pages, 'discovered=' + discovered, 'unique_urls=' + books.size);
   return books;
 }
+

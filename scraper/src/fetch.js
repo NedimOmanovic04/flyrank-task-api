@@ -5,7 +5,7 @@ export const first = 'https://books.toscrape.com/catalogue/page-1.html';
 export const counts = { pages_fetched: 0, cache_hits: 0 };
 let lastRequest = 0;
 
-export async function getPage(url, filename) {
+async function loadPage(url, filename) {
   if (new URL(url).origin !== new URL(first).origin) throw Error('Outside sandbox');
   await mkdir('cache', { recursive: true });
   const path = 'cache/' + filename;
@@ -34,4 +34,15 @@ export async function getPage(url, filename) {
   counts.pages_fetched++;
   console.log('FETCH', filename, Buffer.byteLength(html));
   return { html, fetched_at: (await stat(path)).mtime.toISOString() };
+}
+
+export async function getPage(url, filename) {
+  try {
+    return await loadPage(url, filename);
+  } catch (err) {
+    if (err.name !== 'TimeoutError' && !(err.status >= 500 && err.status < 600)) throw err;
+    console.log('RETRY', url, err.message);
+    await wait(1000);
+    return loadPage(url, filename);
+  }
 }
