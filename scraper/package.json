@@ -1,0 +1,1 @@
+{"name":"flyrank-books","private":true,"type":"module","scripts":{"start":"node src/main.js"},"engines":{"node":">=22.12"},"dependencies":{"cheerio":"^1.2.0","zod":"^4.6.7"}}
