@@ -1,2 +1,2 @@
-import { getPage, first } from './fetch.js';
-await getPage(first, 'catalogue-page-1.html');
+import { discover } from './discover.js';
+await discover();
