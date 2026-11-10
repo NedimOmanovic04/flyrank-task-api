@@ -7,7 +7,8 @@
     "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test tests/auth.test.js",
     "test:db": "node --test tests/api.test.js",
-    "test:live": "node --env-file-if-exists=.env scripts/auth-check.js"
+    "test:live": "node --env-file-if-exists=.env scripts/auth-check.js",
+    "start:triage": "node --env-file-if-exists=.env scripts/triage-dev.js"
   },
   "keywords": [
     "express",
@@ -20,6 +21,7 @@
     "@supabase/supabase-js": "^2.118.0",
     "express": "^4.19.2",
     "pg": "^8.23.1",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.7"
   }
 }

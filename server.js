@@ -10,6 +10,7 @@ const PORT = Number(process.env.PORT || 3000);
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 app.use(express.json());
+app.use(require('./src/routes/triage'));
 app.use(createAuthRouter());
 
 
@@ -18,7 +19,7 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Task API',
     version: '1.0',
-    endpoints: ['/tasks', '/stats', '/auth/signup', '/auth/login', '/auth/logout',
+    endpoints: ['/triage', '/tasks', '/stats', '/auth/signup', '/auth/login', '/auth/logout',
       '/public/info', '/protected/profile', '/protected/dashboard', '/docs']
   });
 });
