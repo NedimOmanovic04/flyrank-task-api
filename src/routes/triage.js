@@ -10,6 +10,7 @@ router.post('/triage', async (req, res, next) => {
   try {
     return res.json(await classify(parsed.data.text));
   } catch (error) {
+    if (error.publicStatus) return res.status(error.publicStatus).json({ error: error.message });
     return next(error);
   }
 });

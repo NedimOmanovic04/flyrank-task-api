@@ -8,3 +8,4 @@ credentials.json
 *.db-journal
 *.db-wal
 *.db-shm
+logs/quarantine.jsonl
